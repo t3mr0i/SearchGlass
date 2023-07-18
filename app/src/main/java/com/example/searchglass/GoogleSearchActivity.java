@@ -17,6 +17,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.RemoteViews;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
@@ -26,6 +27,7 @@ import com.google.android.glass.timeline.LiveCard;
 import com.google.android.glass.touchpad.Gesture;
 import com.google.android.glass.touchpad.GestureDetector;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -42,151 +44,172 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 public class GoogleSearchActivity extends Activity {
-        private static final String TAG = "GoogleSearchActivity";
-        private static final int SPEECH_REQUEST_CODE = 0;
-        private static final String LIVE_CARD_TAG = "GoogleSearchLiveCard";
+    private static final String TAG = "GoogleSearchActivity";
+    private static final int SPEECH_REQUEST_CODE = 0;
+    private GestureDetector mGestureDetector;
 
-        private GestureDetector mGestureDetector;
-
-        private TextView tvResponse;
-        private SpeechRecognizer recognizer;
-        private TextToSpeech tts;
-        private MediaPlayer mediaPlayerWaiting;
-        private MediaPlayer mediaPlayerResultsDone;
+    private TextView tvResponse;
+    private SpeechRecognizer recognizer;
+    private TextToSpeech tts;
+    private MediaPlayer mediaPlayerWaiting;
+    private MediaPlayer mediaPlayerResultsDone;
     private MediaPlayer mediaPlayerTapPrompt;
 
     private GestureDetector detector;
-        private ProgressBar progressBar;
-        private ImageView imageView;
+    private ProgressBar progressBar;
+    private ImageView imageView;
 
-        private static final String PROJECT_ID = "your_project_id";
-        private static final String LOCATION = "global";
+    private static final String LIVE_CARD_TAG = "GoogleSearchLiveCard";
+    private LiveCard mLiveCard;
 
-        @Override
-        protected void onPause() {
-            super.onPause();
-            if (recognizer != null) {
-                recognizer.cancel();
-                recognizer.destroy();
-                recognizer = null;
-            }
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (recognizer != null) {
+            recognizer.cancel();
+            recognizer.destroy();
+            recognizer = null;
         }
-
-        @Override
-        protected void onResume() {
-            super.onResume();
-            if (recognizer == null) {
-                recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-                recognizer.setRecognitionListener(new MyRecognitionListener());
-            }
-            // Start listening for voice input right away
-
-        }
-
-        private void startVoiceRecognition() {
-            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            startActivityForResult(intent, SPEECH_REQUEST_CODE);
-        }
-
-        @Override
-        protected void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            setContentView(R.layout.activity_google_search);
-
-            tvResponse = (TextView) findViewById(R.id.tvResponse);
-            progressBar = (ProgressBar) findViewById(R.id.progressBar);
-            imageView = (ImageView) findViewById(R.id.imageView);
-            mGestureDetector = createGestureDetector(this);
-            startVoiceRecognition();
-
-            mediaPlayerWaiting = MediaPlayer.create(this, R.raw.waiting);
-            mediaPlayerResultsDone = MediaPlayer.create(this, R.raw.results_done);
-            mediaPlayerTapPrompt = MediaPlayer.create(this, R.raw.tap_prompt);
-
-            mediaPlayerWaiting.setLooping(true);
-
-            detector = createGestureDetector(this);
-
-            tts = new TextToSpeech(this, status -> {
-                if (status != TextToSpeech.ERROR) {
-                    tts.setLanguage(Locale.US);
-                }
-            });
-            tvResponse.setGravity(Gravity.CENTER);
-
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-            recognizer.setRecognitionListener(new MyRecognitionListener());
-        }
-
-        private GestureDetector createGestureDetector(Context context) {
-            GestureDetector gestureDetector = new GestureDetector(context);
-            // Create the listener for the GestureDetector
-            gestureDetector.setBaseListener(gesture -> {
-                // Implement scrolling
-                if (gesture == Gesture.TAP) {
-                    // Handle tap
-                    mediaPlayerTapPrompt.start();
-
-                    tts.stop();
-                    startVoiceRecognition();
-                    return true;
-                } else if (gesture == Gesture.SWIPE_RIGHT) {
-                    // Handle swipe right
-                    finish();
-                    return true;
-                }
-                else if (gesture == Gesture.SWIPE_UP) {
-                    // Handle swipe up
-                    publishCard(this);
-                    return true;
-                }
-                return false;
-            });
-            return gestureDetector;
-        }
-
-    private void publishCard (Context context){
-        // Create a new LiveCard
-        LiveCard liveCard = new LiveCard(context, LIVE_CARD_TAG);
-
-        // Set up the live card's action with a pending intent
-        // that starts this activity when the card is clicked
-        Intent intent = new Intent(context, GoogleSearchActivity.class);
-        liveCard.setAction(PendingIntent.getActivity(context, 0, intent, 0));
-
-        // Publish the live card
-        liveCard.publish(LiveCard.PublishMode.REVEAL);
     }
 
     @Override
-        public boolean onGenericMotionEvent(MotionEvent event) {
-            if (detector != null) {
-                return detector.onMotionEvent(event);
-            }
-            return super.onGenericMotionEvent(event);
+    protected void onResume() {
+        super.onResume();
+        if (recognizer == null) {
+            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            recognizer.setRecognitionListener(new MyRecognitionListener());
         }
+        // Start listening for voice input right away
+
+    }
+
+    private void startVoiceRecognition() {
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        startActivityForResult(intent, SPEECH_REQUEST_CODE);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_google_search);
+
+        tvResponse = (TextView) findViewById(R.id.tvResponse);
+        progressBar = (ProgressBar) findViewById(R.id.progressBar);
+        imageView = (ImageView) findViewById(R.id.imageView);
+        mGestureDetector = createGestureDetector(this);
+        startVoiceRecognition();
+
+        mediaPlayerWaiting = MediaPlayer.create(this, R.raw.waiting);
+        mediaPlayerResultsDone = MediaPlayer.create(this, R.raw.results_done);
+        mediaPlayerTapPrompt = MediaPlayer.create(this, R.raw.tap_prompt);
+
+        mediaPlayerWaiting.setLooping(true);
+
+        detector = createGestureDetector(this);
+
+        tts = new TextToSpeech(this, status -> {
+            if (status != TextToSpeech.ERROR) {
+                tts.setLanguage(Locale.US);
+            }
+        });
+        tvResponse.setGravity(Gravity.CENTER);
+
+        recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        recognizer.setRecognitionListener(new MyRecognitionListener());
+    }
+
+    private GestureDetector createGestureDetector(Context context) {
+        GestureDetector gestureDetector = new GestureDetector(context);
+        // Create the listener for the GestureDetector
+        gestureDetector.setBaseListener(gesture -> {
+            // Implement scrolling
+            if (gesture == Gesture.TAP) {
+                // Handle tap
+                mediaPlayerTapPrompt.start();
+
+                tts.stop();
+                startVoiceRecognition();
+                return true;
+            } else if (gesture == Gesture.SWIPE_RIGHT) {
+                // Handle swipe right
+                finish();
+                return true;
+            } else if (gesture == Gesture.SWIPE_UP) {
+                // Handle swipe up
+                publishCard(this);
+                finish();
+                return true;
+            }
+            return false;
+        });
+        return gestureDetector;
+    }
+
+    private void publishCard(GoogleSearchActivity googleSearchActivity) {
+        RemoteViews remoteViews = new RemoteViews(GoogleSearchActivity.this.getPackageName(), R.layout.live_card_layout);
+        remoteViews.setCharSequence(R.id.tvResponse, "setText",tvResponse.getText());
+
+
+        if (mLiveCard == null) {
+            mLiveCard = new LiveCard(this, LIVE_CARD_TAG);
+
+            Intent intent = new Intent(this, GoogleSearchActivity.class);
+            mLiveCard.setAction(PendingIntent.getActivity(this, 0, intent, 0));
+
+            // Publish the live card
+            mLiveCard.publish(LiveCard.PublishMode.REVEAL);
+        } else {
+            // Card is already published.
+            return;
+        }
+    }
+
+    @Override
+    public boolean onGenericMotionEvent(MotionEvent event) {
+        if (detector != null) {
+            return detector.onMotionEvent(event);
+        }
+        return super.onGenericMotionEvent(event);
+    }
 
 
     private class MyRecognitionListener implements RecognitionListener {
         @Override
-        public void onReadyForSpeech(Bundle params) { }
+        public void onReadyForSpeech(Bundle params) {
+        }
+
         @Override
-        public void onBeginningOfSpeech() { }
+        public void onBeginningOfSpeech() {
+        }
+
         @Override
-        public void onRmsChanged(float rmsdB) { }
+        public void onRmsChanged(float rmsdB) {
+        }
+
         @Override
-        public void onBufferReceived(byte[] buffer) { }
+        public void onBufferReceived(byte[] buffer) {
+        }
+
         @Override
-        public void onEndOfSpeech() { }
+        public void onEndOfSpeech() {
+        }
+
         @Override
-        public void onError(int error) { }
+        public void onError(int error) {
+        }
+
         @Override
-        public void onResults(Bundle results) { }
+        public void onResults(Bundle results) {
+        }
+
         @Override
-        public void onPartialResults(Bundle partialResults) { }
+        public void onPartialResults(Bundle partialResults) {
+        }
+
         @Override
-        public void onEvent(int eventType, Bundle params) { }
+        public void onEvent(int eventType, Bundle params) {
+        }
     }
 
     @Override
@@ -195,7 +218,7 @@ public class GoogleSearchActivity extends Activity {
             ArrayList<String> matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
             if (matches != null && matches.size() > 0) {
                 String query = matches.get(0);
-                String urlString = "https://kgsearch.googleapis.com/v1/entities:search?query=" + (query  + "&key=" + Secrets.API_KEY + "&limit=1&indent=True");
+                String urlString = "https://kgsearch.googleapis.com/v1/entities:search?query=" + (query + "&key=" + Secrets.API_KEY + "&limit=1&indent=True");
                 tvResponse.setText("");
                 imageView.setImageDrawable(null);
                 new PostTask().execute(urlString);
@@ -284,24 +307,26 @@ public class GoogleSearchActivity extends Activity {
             // If result is not null, proceed with parsing the JSON
             try {
                 JSONObject jsonResponse = new JSONObject(result);
-                if (jsonResponse.has("itemListElement") && jsonResponse.getJSONArray("itemListElement").length() > 0) {
-                    JSONObject item = jsonResponse.getJSONArray("itemListElement").getJSONObject(0).getJSONObject("result");
-                    if (item.has("detailedDescription") && item.has("image")) {
-                        String output = item.getJSONObject("detailedDescription").getString("articleBody");
-                        String imageUrl = item.getJSONObject("image").getString("contentUrl");
+                if (jsonResponse.has("itemListElement")) {
+                    JSONArray itemListElement = jsonResponse.getJSONArray("itemListElement");
+                    for (int i = 0; i < itemListElement.length(); i++) {
+                        JSONObject item = itemListElement.getJSONObject(i).getJSONObject("result");
+                        if (item.has("detailedDescription") && item.has("image")) {
+                            String output = item.getJSONObject("detailedDescription").getString("articleBody");
+                            String imageUrl = item.getJSONObject("image").getString("contentUrl");
 
-                        // Load the image into the ImageView using Glide
-                        Glide.with(GoogleSearchActivity.this)
-                                .load(imageUrl)
-                                .apply(new RequestOptions().diskCacheStrategy(DiskCacheStrategy.ALL))
-                                .into(imageView);
+                            Glide.with(GoogleSearchActivity.this)
+                                    .load(imageUrl)
+                                    .apply(new RequestOptions().diskCacheStrategy(DiskCacheStrategy.ALL))
+                                    .into(imageView);
 
-                        tvResponse.setText(output);
-                        tts.speak(output, TextToSpeech.QUEUE_FLUSH, null);
-                    } else {
-                        tvResponse.setText("No detailed description or image found for your query.");
-                        tts.speak("No detailed description or image found for your query.", TextToSpeech.QUEUE_FLUSH, null);
+                            tvResponse.setText(output);
+                            tts.speak(output, TextToSpeech.QUEUE_FLUSH, null);
+                            return;
+                        }
                     }
+                    tvResponse.setText("No detailed description or image found for your query.");
+                    tts.speak("No detailed description or image found for your query.", TextToSpeech.QUEUE_FLUSH, null);
                 } else {
                     tvResponse.setText("No results found for your query.");
                     tts.speak("No results found for your query.", TextToSpeech.QUEUE_FLUSH, null);
@@ -311,8 +336,31 @@ public class GoogleSearchActivity extends Activity {
                 Log.e(TAG, "Error parsing JSON response", e);
             }
         }
+    }
 
-
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (tts != null) {
+            tts.stop();
+            tts.shutdown();
         }
+        if (recognizer != null) {
+            recognizer.destroy();
+        }
+        if (mediaPlayerWaiting != null) {
+            mediaPlayerWaiting.release();
+        }
+        if (mediaPlayerTapPrompt != null) {
+            mediaPlayerTapPrompt.release();
+        }
+        if (mediaPlayerResultsDone != null) {
+            mediaPlayerResultsDone.release();
+        }
+        if (mLiveCard != null && mLiveCard.isPublished()) {
+            mLiveCard.unpublish();
+            mLiveCard = null;
+        }
+    }
 }
 

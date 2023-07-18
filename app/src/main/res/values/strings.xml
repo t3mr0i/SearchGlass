@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">SearchGlass</string>
+    <string name="voice_trigger">Search Glass</string>
+    <string name="voice_trigger_start">open Search Glass</string>
+    <string name="image_desc">Image from Google Knowledge Graph Search</string>
+
+</resources>
